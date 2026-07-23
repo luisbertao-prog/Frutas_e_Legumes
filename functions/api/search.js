@@ -62,9 +62,13 @@ function cleanName(v = "") {
   return clean(decode(v))
     .replace(/\{\{[^}]*$/g, " ")
     .replace(/\{\{[\s\S]*?\}\}/g, " ")
+    .replace(/(?:limpar filtros?|ver filtros?|ordenar por|mais barato|mais caro)/gi, " ")
+    .replace(/quant\.?\s*m[ií]nima\s*=\s*[^€]{0,70}?(?=(?:indispon[ií]vel|\d+\s*[,.]\s*\d{2}\s*€|$))/gi, " ")
     .replace(/(?:indispon[ií]vel|quantidade m[ií]nima atingida|qtd\.? m[ií]nima atingida|t\.? m[ií]nima atingida)/gi, " ")
     .replace(/\b(?:adicionar|remover|comprar|ver produto|favoritos?)\b/gi, " ")
+    .replace(/\s+\d+\s*,\s*\d{2}\s*€(?:\s*\/\s*(?:kg|un|l|lt))?[\s\S]*$/i, " ")
     .replace(/\s+/g, " ")
+    .replace(/^(?:s\.\s*)+/i, "")
     .replace(/^[,.;:|\-–—\s]+|[,.;:|\-–—\s]+$/g, "")
     .trim();
 }
@@ -117,15 +121,20 @@ function proximityParser(html, store, q, fallback){
   const out=[]; const plain=text(html); const low=norm(plain); const query=norm(q);
   let pos=0, count=0;
   while((pos=low.indexOf(query,pos))!==-1 && count<80){
-    const before=Math.max(0,pos-100), after=Math.min(plain.length,pos+420); const chunk=plain.slice(before,after);
-    const prices=[...chunk.matchAll(/(\d+[,.]\d{2})\s*€(?:\s*\/\s*(kg|un|l|lt))?/gi)];
+    const before=Math.max(0,pos-120), after=Math.min(plain.length,pos+420); const chunk=plain.slice(before,after);
+    const relPos=pos-before;
+    const afterQuery=chunk.slice(relPos);
+    const prices=[...afterQuery.matchAll(/(\d+\s*,\s*\d{2}|\d+[,.]\d{2})\s*€(?:\s*\/\s*(kg|un|l|lt))?/gi)];
     if(prices.length){
-      const pMatch=prices[prices.length-1]; const p=num(pMatch[1]);
+      const pMatch=prices[0]; const p=num(pMatch[1].replace(/\s/g,""));
       if(validPrice(p)){
-        const start=Math.max(0,chunk.toLowerCase().lastIndexOf(". ",Math.max(0,pos-before))-1);
-        let name=cleanName(chunk.slice(start,Math.min(chunk.length,(pos-before)+100)));
-        if(name.length>160) name=cleanName(name.slice(-160)); if(!relevant(name,q)) name=cleanName(chunk.slice(Math.max(0,pos-before-50),pos-before+90));
-        out.push({name,price:p,unit:pMatch[2]?`€/${pMatch[2].toLowerCase()}`:unitFrom(chunk),url:fallback}); count++;
+        const priceIndex=relPos+pMatch.index;
+        let name=cleanName(chunk.slice(Math.max(0,relPos-40),priceIndex));
+        const qIndex=norm(name).indexOf(query);
+        if(qIndex>0) name=cleanName(name.slice(qIndex));
+        if(name.length>160) name=cleanName(name.slice(0,160));
+        if(!relevant(name,q)) name=cleanName(chunk.slice(relPos,priceIndex));
+        out.push({name,price:p,unit:pMatch[2]?`€/${pMatch[2].toLowerCase()}`:unitFrom(afterQuery.slice(0,180)),url:fallback}); count++;
       }
     }
     pos+=query.length;
